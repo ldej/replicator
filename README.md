@@ -18,7 +18,7 @@ Your model should be capable of handling concurrent requests across multiple clu
 
 ## Design
 
-### Scenarios
+### Replication
 
 #### Store happy path
 
@@ -41,12 +41,12 @@ Your model should be capable of handling concurrent requests across multiple clu
 2. A client denies because a key is already reserved
 3. Initiating client sends DECLINE to all clients within the same cluster and other clusters
 
-### Request value for key happy path
+#### Request value for key happy path
 
 1. Get key from any client within the cluster or other clusters
 2. Return value for key
 
-### Requested key doesn't exist
+#### Requested key doesn't exist
 
 1. Get key from any client within the cluster or other clusters
 2. Return unknown key
@@ -57,6 +57,16 @@ When storing a key, a peer will consult the peers in its cluster, and 1 represen
 The representative in a cluster consults with the peers in its cluster and returns the response to the requesting peer. 
 
 A peer treats itself as a peer, so it communicates with its own rpc server.
+
+### Clustering
+
+One peer is started as the DHT bootstrap peer. The other peers will connect to the bootstrap peer.
+
+If we cannot connect to the DHT bootstrap node, then we cannot continue.
+
+We also connect to our cluster bootstrapping peer. We "Join" a cluster by calling AddPeer on the bootstrap peer.
+
+When we join it, we ask the other peer to add us, and return its current state, and metadata. Make sure we are connected to all its peers.
 
 ## TODO
 
@@ -103,3 +113,11 @@ Get the value of a key from all peers:
 ```shell script
 $ curl localhost:8000/some-key
 ```
+
+# TODO
+
+- clustering with parameter, no autoclustering
+- replication within cluster, then check other cluster
+- no leader election, no RAFT, no pub/sub
+- replicate state and metadata when node joins cluster
+- set up kdht bootstrapping node

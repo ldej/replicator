@@ -12,7 +12,17 @@ import (
 )
 
 func NewKDHT(ctx context.Context, host host.Host, config Config) (*disc.RoutingDiscovery, error) {
-	kdht, err := dht.New(ctx, host)
+	var options []dht.Option
+
+	if len(config.BootstrapPeers) == 0 {
+		options = append(options, dht.Mode(dht.ModeServer))
+	}
+
+	kdht, err := dht.New(
+		ctx,
+		host,
+		options...,
+	)
 	if err != nil {
 		return nil, err
 	}

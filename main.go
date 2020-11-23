@@ -6,7 +6,6 @@ import (
 	"log"
 	"strings"
 
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -47,9 +46,9 @@ func main() {
 	flag.IntVar(&config.HttpPort, "http", 8000, "")
 	flag.Parse()
 
-	if len(config.BootstrapPeers) == 0 {
-		config.BootstrapPeers = dht.DefaultBootstrapPeers
-	}
+	// if len(config.BootstrapPeers) == 0 {
+	// 	config.BootstrapPeers = dht.DefaultBootstrapPeers
+	// }
 
 	ctx := context.Background()
 

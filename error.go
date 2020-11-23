@@ -7,8 +7,6 @@ import (
 )
 
 var (
-	ErrClusterFull = errors.New("cluster is full")
-	ErrNotLeader = errors.New("peer is not the leader")
 	ErrNotInCluster = errors.New("not in cluster")
 )
 

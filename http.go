@@ -13,10 +13,11 @@ func StartWebServer(port int, cluster *Cluster) {
 	app := App{cluster: cluster}
 
 	r := mux.NewRouter()
-	r.HandleFunc("/{key}", app.Put).Methods(http.MethodPost)
-	r.HandleFunc("/{key}", app.Get).Methods(http.MethodGet)
-	r.HandleFunc("/{key}/local", app.PutLocal).Methods(http.MethodPost)
-	r.HandleFunc("/{key}/proposed", app.PutProposed).Methods(http.MethodPost)
+	r.HandleFunc("/store/{key}", app.Put).Methods(http.MethodPost)
+	r.HandleFunc("/store/{key}", app.Get).Methods(http.MethodGet)
+	r.HandleFunc("/store/local/{key}", app.PutLocal).Methods(http.MethodPost)
+	r.HandleFunc("/store/proposed/{key}", app.PutProposed).Methods(http.MethodPost)
+	r.HandleFunc("/peers", app.Peers).Methods(http.MethodGet)
 
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -46,6 +47,8 @@ func (a *App) Put(w http.ResponseWriter, r *http.Request) {
 
 	_ = json.NewDecoder(r.Body).Decode(&storeRequest)
 	response.Errors = a.cluster.replicationService.Store(key, storeRequest.Value)
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -54,6 +57,8 @@ func (a *App) Get(w http.ResponseWriter, r *http.Request) {
 	var response Response
 
 	response.Values, response.Errors = a.cluster.replicationService.GetFromPeers(key)
+
+	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -77,4 +82,10 @@ func (a *App) PutProposed(w http.ResponseWriter, r *http.Request) {
 	a.cluster.replicationService.proposed.Store(key, storeRequest.Value)
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (a *App) Peers(w http.ResponseWriter, r *http.Request) {
+	peers, _ := a.cluster.Peers(r.Context())
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(peers)
 }

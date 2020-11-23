@@ -9,10 +9,10 @@ import (
 const (
 	ClusterServiceName = "ClusterRPCAPI"
 	ClusterAddPeerFuncName = "AddPeer"
+	ClusterIDFuncName = "ID"
 	ClusterUpdatePeersFuncName = "UpdatePeers"
-	ClusterPeersFuncName = "Peers"
 	ClusterJoinFuncName = "Join"
-	ClusterBootstrapFuncName = "Bootstrap"
+
 )
 
 type ClusterRPCAPI struct {
@@ -39,5 +39,11 @@ func (c *ClusterRPCAPI) Join(ctx context.Context, in peer.ID, out *struct{}) err
 
 func (c *ClusterRPCAPI) Bootstrap(ctx context.Context, in struct {}, out *struct{}) error {
 	c.c.bootstrapping = true
+	return nil
+}
+
+func (c *ClusterRPCAPI) ID(ctx context.Context, in struct{}, out *ID) error {
+	id := c.c.ID(ctx)
+	*out = *id
 	return nil
 }

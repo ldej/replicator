@@ -25,7 +25,10 @@ func NewHost(ctx context.Context, config Config) host.Host {
 		log.Fatal(err)
 	}
 
-	log.Printf("Host ID: %s\n", h.ID().Pretty())
-	log.Printf("%-v", h.Addrs())
+	log.Printf("Host ID: %s", h.ID().Pretty())
+	log.Printf("Connect to me on:")
+	for _, addr := range h.Addrs() {
+		log.Printf("  - %s/p2p/%s", addr, h.ID().Pretty())
+	}
 	return h
 }
