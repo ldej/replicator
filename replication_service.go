@@ -14,7 +14,6 @@ var (
 	ErrDuplicateKey            = errors.New("duplicate key")
 	ErrKeyAlreadyProposed      = errors.New("key already proposed")
 	ErrProposalNotFound        = errors.New("proposal not found")
-	ErrKeyAndValueAlreadyExist = errors.New("key and value already exist")
 	ErrNotFound                = errors.New("not found")
 )
 
@@ -33,10 +32,10 @@ func NewReplicationService() *ReplicationService {
 	}
 }
 
-func (r *ReplicationService) Propose(key string, value string) error {
-	valueStored, foundStored := r.store.Load(key)
+func (r *ReplicationService) Propose(key string, value []byte) error {
+	_, foundStored := r.store.Load(key)
 
-	valueProposed, foundProposed := r.proposed.Load(key)
+	_, foundProposed := r.proposed.Load(key)
 
 	if !foundStored && !foundProposed {
 		// key does not exist yet
@@ -44,25 +43,24 @@ func (r *ReplicationService) Propose(key string, value string) error {
 		return nil
 	}
 
-	if foundStored && value != valueStored {
-		// same key with different value
+	if foundStored {
 		return ErrDuplicateKey
 	}
 
-	if foundProposed && value != valueProposed {
+	if foundProposed {
 		return ErrKeyAlreadyProposed
 	}
 
-	return ErrKeyAndValueAlreadyExist
+	return nil
 }
 
-func (r *ReplicationService) Store(key string, value string) PeerErrors {
+func (r *ReplicationService) Store(key string, value []byte) PeerErrors {
 	peers := r.host.Peerstore().Peers() // TODO, only connect with our peers, and do clustering
-	numberOfPeers := len(peers)
+	lenPeers := len(peers)
 
-	proposeReplies := make([]ProposeReply, numberOfPeers, numberOfPeers)
-	ctxs := make([]context.Context, numberOfPeers, numberOfPeers)
-	proposeReplyPointers := make([]interface{}, numberOfPeers, numberOfPeers)
+	proposeReplies := make([]ProposeReply, lenPeers, lenPeers)
+	ctxs := make([]context.Context, lenPeers, lenPeers)
+	proposeReplyPointers := make([]interface{}, lenPeers, lenPeers)
 
 	for i := range proposeReplyPointers {
 		proposeReplyPointers[i] = &proposeReplies[i]
@@ -85,9 +83,9 @@ func (r *ReplicationService) Store(key string, value string) PeerErrors {
 	}
 	log.Printf("All peers accept proposal to store %q", key)
 
-	commitReplies := make([]CommitReply, numberOfPeers, numberOfPeers)
-	ctxs = make([]context.Context, numberOfPeers, numberOfPeers)
-	commitReplyPointers := make([]interface{}, numberOfPeers, numberOfPeers)
+	commitReplies := make([]CommitReply, lenPeers, lenPeers)
+	ctxs = make([]context.Context, lenPeers, lenPeers)
+	commitReplyPointers := make([]interface{}, lenPeers, lenPeers)
 
 	for i := range commitReplies {
 		commitReplyPointers[i] = &commitReplies[i]
@@ -112,7 +110,7 @@ func (r *ReplicationService) Store(key string, value string) PeerErrors {
 	return nil
 }
 
-func (r *ReplicationService) StoreLocal(key string, value string) {
+func (r *ReplicationService) StoreLocal(key string, value []byte) {
 	r.store.Store(key, value)
 }
 
@@ -127,15 +125,15 @@ func (r *ReplicationService) Commit(key string) error {
 	return nil
 }
 
-func (r *ReplicationService) GetFromLocal(key string) (string, error) {
+func (r *ReplicationService) GetFromLocal(key string) ([]byte, error) {
 	value, found := r.store.Load(key)
 	if !found {
-		return "", ErrNotFound
+		return nil, ErrNotFound
 	}
-	return value.(string), nil
+	return value.([]byte), nil
 }
 
-func (r *ReplicationService) GetFromPeers(key string) (map[string]string, PeerErrors) {
+func (r *ReplicationService) GetFromPeers(key string) (map[string][]byte, PeerErrors) {
 	peers := r.host.Peerstore().Peers()
 	numberOfPeers := len(peers)
 
@@ -156,14 +154,13 @@ func (r *ReplicationService) GetFromPeers(key string) (map[string]string, PeerEr
 		}
 	}
 
-	var results = map[string]string{}
+	var results = map[string][]byte{}
 	for i, p := range peers {
 		results[p.String()] = replies[i].Value
 	}
 	return results, nil
 }
 
-// thanks ipfs-cluster
 func CopyGetRepliesToIfaces(in []*GetReply) []interface{} {
 	ifaces := make([]interface{}, len(in))
 	for i := range in {

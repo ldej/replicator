@@ -11,6 +11,8 @@ import (
 
 type Config struct {
 	HttpPort int
+	ClusterID string
+	InitCluster bool
 	ProtocolID string
 	Rendezvous string
 	BootstrapPeers addrList
@@ -39,16 +41,14 @@ func (al *addrList) Set(value string) error {
 func main() {
 	config := Config{}
 
-	flag.StringVar(&config.Rendezvous, "rendezvous", "ldej/testing", "")
+	flag.StringVar(&config.Rendezvous, "rendezvous", "ldej/replicator", "")
 	flag.Var(&config.BootstrapPeers, "peer", "Peer multiaddress for bootstrapping")
+	flag.BoolVar(&config.InitCluster, "init", false, "Starts a new cluster when true")
+	flag.StringVar(&config.ClusterID, "cid", "", "ID of the cluster to join")
 	flag.Var(&config.ListenAddresses, "listen", "Adds a multiaddress to the listen list")
 	flag.StringVar(&config.ProtocolID, "protocolid", "/p2p/rpc/replicator", "")
 	flag.IntVar(&config.HttpPort, "http", 8000, "")
 	flag.Parse()
-
-	// if len(config.BootstrapPeers) == 0 {
-	// 	config.BootstrapPeers = dht.DefaultBootstrapPeers
-	// }
 
 	ctx := context.Background()
 

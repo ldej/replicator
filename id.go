@@ -6,6 +6,7 @@ import (
 
 type ID struct {
 	ID        peer.ID   `json:"id"`
+	ClusterID string    `json:"cluster_id"`
 	Addresses []string  `json:"addresses"`
 	Peers     []peer.ID `json:"peers"`
 }

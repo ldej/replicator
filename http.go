@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 
@@ -31,25 +32,25 @@ type App struct {
 	cluster *Cluster
 }
 
-type StoreRequest struct {
-	Value string `json:"value"`
-}
-
 type Response struct {
 	Errors PeerErrors `json:"errors,omitempty"`
-	Values map[string]string `json:"values,omitempty"`
+	Values map[string][]byte `json:"values,omitempty"`
 }
 
 func (a *App) Put(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
-	var storeRequest StoreRequest
 	var response Response
 
-	_ = json.NewDecoder(r.Body).Decode(&storeRequest)
-	response.Errors = a.cluster.replicationService.Store(key, storeRequest.Value)
+	value, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Reading body failed: %-v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	response.Errors = a.cluster.replicationService.Store(key, value)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 func (a *App) Get(w http.ResponseWriter, r *http.Request) {
@@ -65,10 +66,14 @@ func (a *App) Get(w http.ResponseWriter, r *http.Request) {
 func (a *App) PutLocal(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 
-	var storeRequest StoreRequest
-	_ = json.NewDecoder(r.Body).Decode(&storeRequest)
+	value, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Reading body failed: %-v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	a.cluster.replicationService.StoreLocal(key, storeRequest.Value)
+	a.cluster.replicationService.StoreLocal(key, value)
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -76,10 +81,14 @@ func (a *App) PutLocal(w http.ResponseWriter, r *http.Request) {
 func (a *App) PutProposed(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 
-	var storeRequest StoreRequest
-	_ = json.NewDecoder(r.Body).Decode(&storeRequest)
+	value, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("Reading body failed: %-v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-	a.cluster.replicationService.proposed.Store(key, storeRequest.Value)
+	a.cluster.replicationService.proposed.Store(key, value)
 
 	w.WriteHeader(http.StatusOK)
 }

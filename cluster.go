@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"log"
-	"sort"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -56,15 +55,14 @@ func NewCluster(
 		replicationService: replicationService,
 	}
 
-	c.addPeer(c.id)
-	go c.discover()
-
 	err = c.setupRpc()
 	if err != nil {
 		return nil, err
 	}
 
 	c.setupRPCClients()
+
+	go c.discover()
 
 	return c, nil
 }
@@ -78,15 +76,15 @@ func (c *Cluster) setupRpc() error {
 		return err
 	}
 
-	consensusRpc := ClusterRPCAPI{c: c}
-	err = rpcServer.Register(&consensusRpc)
+	clusterRpc := ClusterRPCAPI{c: c}
+	err = rpcServer.Register(&clusterRpc)
 	if err != nil {
 		return err
 	}
 
 	c.rpcServer = rpcServer
-
 	c.rpcClient = rpc.NewClientWithServer(c.host, protocol.ID(c.config.ProtocolID), rpcServer)
+
 	return nil
 }
 
@@ -122,56 +120,23 @@ func (c *Cluster) discover() {
 			}
 
 			log.Printf(" -> Connected to %s", p.ID)
-
-			c.addPeer(p.ID)
 		}
 		time.Sleep(time.Second * 15)
 	}
 }
 
 func (c *Cluster) knownPeer(peer peer.ID) bool {
-	for _, p := range c.allPeers {
-		if p == peer {
+	for _, p := range c.host.Peerstore().Peers() {
+		if peer == p {
 			return true
 		}
 	}
 	return false
 }
 
-func (c *Cluster) addPeer(p peer.ID) {
-	for _, a := range c.allPeers {
-		if a == p {
-			return
-		}
-	}
-	c.allPeers = append(c.allPeers, p)
-	sort.Sort(c.allPeers)
-}
-
-func (c *Cluster) addClusterPeer(p peer.ID) {
-	for _, a := range c.clusterPeers {
-		if a == p {
-			return
-		}
-	}
-	c.clusterPeers = append(c.clusterPeers, p)
-	sort.Sort(c.clusterPeers)
-	log.Printf("Added cluster peer %s", p)
-}
-
 // Add a peer to this Cluster
 func (c *Cluster) AddPeer(ctx context.Context, p peer.ID) error {
-	if c.bootstrapping {
-		c.addClusterPeer(p)
-		return nil
-	}
 
-	if len(c.clusterPeers) == 0 {
-		log.Printf("Peer %s can't join, I'm not in a cluster", p)
-		return ErrNotInCluster
-	}
-
-	c.addClusterPeer(p)
 	return nil
 }
 
@@ -200,7 +165,8 @@ func (c *Cluster) Peers(ctx context.Context) ([]*ID, error) {
 }
 
 func (c *Cluster) ID(ctx context.Context) *ID {
-	// msgpack decode error [pos 108]: interface conversion: *multiaddr.Multiaddr is not encoding.BinaryUnmarshaler: missing method UnmarshalBinary
+	// msgpack decode error [pos 108]: interface conversion: *multiaddr.Multiaddr is not
+	// encoding.BinaryUnmarshaler: missing method UnmarshalBinary
 	var addrs []string
 	for _, addr := range c.host.Addrs() {
 		addrs = append(addrs, addr.String())
@@ -208,6 +174,7 @@ func (c *Cluster) ID(ctx context.Context) *ID {
 
 	return &ID{
 		ID: c.id,
+		ClusterID: c.config.ClusterID,
 		Addresses: addrs,
 		Peers: c.host.Peerstore().Peers(),
 	}

@@ -60,11 +60,9 @@ A peer treats itself as a peer, so it communicates with its own rpc server.
 
 ### Clustering
 
-One peer is started as the DHT bootstrap peer. The other peers will connect to the bootstrap peer.
+- [*] One peer is started as the DHT bootstrap peer. The other peers will connect to the bootstrap peer. If we cannot connect to the DHT bootstrap node, then we cannot continue.
 
-If we cannot connect to the DHT bootstrap node, then we cannot continue.
-
-We also connect to our cluster bootstrapping peer. We "Join" a cluster by calling AddPeer on the bootstrap peer.
+We also connect to our cluster bootstrapping peer. We join a cluster by calling AddPeer on the bootstrap peer.
 
 When we join it, we ask the other peer to add us, and return its current state, and metadata. Make sure we are connected to all its peers.
 

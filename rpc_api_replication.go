@@ -18,7 +18,7 @@ type ReplicationRPCAPI struct {
 
 type ProposeArgs struct {
 	Key string
-	Value string
+	Value []byte
 }
 
 type ProposeReply struct {}
@@ -45,7 +45,7 @@ type GetArgs struct {
 }
 
 type GetReply struct {
-	Value string
+	Value []byte
 }
 
 func (r *ReplicationRPCAPI) Get(ctx context.Context, argType GetArgs, replyType *GetReply) error {
