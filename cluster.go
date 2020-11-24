@@ -28,8 +28,6 @@ type Cluster struct {
 	clusterPeers peer.IDSlice
 
 	replicationService *ReplicationService
-
-	bootstrapping bool
 }
 
 func NewCluster(
@@ -55,6 +53,14 @@ func NewCluster(
 		replicationService: replicationService,
 	}
 
+	// Start discovering peers
+	go c.discover()
+
+	// // Wait until we actually join a cluster before we enable the rpc calls
+	// if len(c.config.BootstrapPeers) > 0 {
+	// 	c.bootstrap(ctx)
+	// }
+
 	err = c.setupRpc()
 	if err != nil {
 		return nil, err
@@ -62,10 +68,20 @@ func NewCluster(
 
 	c.setupRPCClients()
 
-	go c.discover()
-
 	return c, nil
 }
+
+// func (c *Cluster) bootstrap(ctx context.Context) {
+// 	for _, p := range c.config.BootstrapPeers {
+// 		pinfo, err := peer.AddrInfoFromP2pAddr(p)
+// 		if err != nil {
+// 			log.Printf("Err: %v", err)
+// 			continue
+// 		}
+// 		// TODO find a peer in our cluster to get state from
+// 	}
+//
+// }
 
 func (c *Cluster) setupRpc() error {
 	rpcServer := rpc.NewServer(c.host, protocol.ID(c.config.ProtocolID))
@@ -120,6 +136,8 @@ func (c *Cluster) discover() {
 			}
 
 			log.Printf(" -> Connected to %s", p.ID)
+
+
 		}
 		time.Sleep(time.Second * 15)
 	}
@@ -132,12 +150,6 @@ func (c *Cluster) knownPeer(peer peer.ID) bool {
 		}
 	}
 	return false
-}
-
-// Add a peer to this Cluster
-func (c *Cluster) AddPeer(ctx context.Context, p peer.ID) error {
-
-	return nil
 }
 
 func (c *Cluster) Peers(ctx context.Context) ([]*ID, error) {
@@ -180,22 +192,6 @@ func (c *Cluster) ID(ctx context.Context) *ID {
 	}
 }
 
-// Join another cluster
-func (c *Cluster) Join(ctx context.Context, p peer.ID) error {
-	if p == c.id {
-		log.Printf("Can't join myself")
-		return nil
-	}
-
-	log.Printf("I'm going to join cluster %s", p.String())
-	err := c.rpcClient.Call(p, ClusterServiceName, ClusterAddPeerFuncName, c.id, &struct{}{})
-	if err != nil {
-		log.Printf("Cannot join cluster %s: %-v", p.String(), err)
-		return err
-	}
-	return nil
-}
-
 func Ctxts(n int) []context.Context {
 	ctxs := make([]context.Context, n)
 	for i := 0; i < n; i++ {
@@ -204,18 +200,13 @@ func Ctxts(n int) []context.Context {
 	return ctxs
 }
 
-func RPCDiscardReplies(n int) []interface{} {
-	replies := make([]struct{}, n)
-	return CopyEmptyStructToIfaces(replies)
-}
-
-func CopyEmptyStructToIfaces(in []struct{}) []interface{} {
-	ifaces := make([]interface{}, len(in))
-	for i := range in {
-		ifaces[i] = &in[i]
-	}
-	return ifaces
-}
+// func CopyEmptyStructToIfaces(in []struct{}) []interface{} {
+// 	ifaces := make([]interface{}, len(in))
+// 	for i := range in {
+// 		ifaces[i] = &in[i]
+// 	}
+// 	return ifaces
+// }
 
 func CopyIDsToIfaces(in []*ID) []interface{} {
 	ifaces := make([]interface{}, len(in))

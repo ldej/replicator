@@ -14,7 +14,7 @@ import (
 func NewKDHT(ctx context.Context, host host.Host, config Config) (*disc.RoutingDiscovery, error) {
 	var options []dht.Option
 
-	if len(config.BootstrapPeers) == 0 {
+	if len(config.DiscoveryPeers) == 0 {
 		options = append(options, dht.Mode(dht.ModeServer))
 	}
 
@@ -35,7 +35,7 @@ func NewKDHT(ctx context.Context, host host.Host, config Config) (*disc.RoutingD
 	// Let's connect to the bootstrap nodes first. They will tell us about the
 	// other nodes in the network.
 	var wg sync.WaitGroup
-	for _, peerAddr := range config.BootstrapPeers {
+	for _, peerAddr := range config.DiscoveryPeers {
 		peerinfo, _ := peer.AddrInfoFromP2pAddr(peerAddr)
 		wg.Add(1)
 		go func() {

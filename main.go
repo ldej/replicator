@@ -10,12 +10,12 @@ import (
 )
 
 type Config struct {
-	HttpPort int
-	ClusterID string
-	InitCluster bool
-	ProtocolID string
-	Rendezvous string
-	BootstrapPeers addrList
+	HttpPort        int
+	ClusterID       string
+	ProtocolID      string
+	Rendezvous      string
+	DiscoveryPeers  addrList
+	BootstrapPeers  addrList
 	ListenAddresses addrList
 }
 
@@ -42,8 +42,8 @@ func main() {
 	config := Config{}
 
 	flag.StringVar(&config.Rendezvous, "rendezvous", "ldej/replicator", "")
-	flag.Var(&config.BootstrapPeers, "peer", "Peer multiaddress for bootstrapping")
-	flag.BoolVar(&config.InitCluster, "init", false, "Starts a new cluster when true")
+	flag.Var(&config.DiscoveryPeers, "peer", "Peer multiaddress for peer discovery")
+	flag.Var(&config.BootstrapPeers, "bootstrap", "Peer multiaddress for joining a cluster")
 	flag.StringVar(&config.ClusterID, "cid", "", "ID of the cluster to join")
 	flag.Var(&config.ListenAddresses, "listen", "Adds a multiaddress to the listen list")
 	flag.StringVar(&config.ProtocolID, "protocolid", "/p2p/rpc/replicator", "")
