@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -21,11 +22,13 @@ func StartWebServer(port int, cluster *Cluster) {
 	r.HandleFunc("/local", app.GetLocal).Methods(http.MethodGet)
 	r.HandleFunc("/peers", app.Peers).Methods(http.MethodGet)
 
-	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", port),
-		Handler: r,
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		panic(err)
 	}
-	log.Fatal(server.ListenAndServe())
+
+	fmt.Println("HTTP Listening on:", listener.Addr().(*net.TCPAddr).Port)
+	log.Fatal(http.Serve(listener, r))
 }
 
 type App struct {

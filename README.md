@@ -58,26 +58,13 @@ The representative in a cluster consults with the peers in its cluster and retur
 
 A peer treats itself as a peer, so it communicates with its own rpc server.
 
+### DHT Bootstrapping
+
+One peer is started as the DHT bootstrap peer. The other peers will connect to the bootstrap peer. If we cannot connect to the DHT bootstrap node, then we cannot continue.
+
 ### Clustering
 
-- [*] One peer is started as the DHT bootstrap peer. The other peers will connect to the bootstrap peer. If we cannot connect to the DHT bootstrap node, then we cannot continue.
-
-We also connect to our cluster bootstrapping peer. We join a cluster by calling AddPeer on the bootstrap peer.
-
-When we join it, we ask the other peer to add us, and return its current state, and metadata. Make sure we are connected to all its peers.
-
-## TODO
-
-- How do hosts discover each other? -> ~mDNS~ / kdht / ~hardcoded~
-- Deployment in kubernetes
-
-## Improvements
-
-- Automated removal of proposal after timeout
-- Check if proposal and commit are from the same peer
-- Synchronize peers in a cluster when they join
-- Keep history of actions which can be used to build the current state
-- Resolve disagreements between peers
+A peer is started with a cluster ID.
 
 ## Tech
 
@@ -93,29 +80,16 @@ GOPRIVATE='github.com/libp2p/*' go get ./...
 
 ## Instructions
 
-### Happy path
+TODO
 
-```shell script
-$ go build
-$ ./replicator -http 8000
-```
+## Improvements
 
-Add a key-value pair to all peers:
-
-```shell script
-$ curl -X POST localhost:8000/some-key -d '{"value": "some-value"}'
-```
-
-Get the value of a key from all peers:
-
-```shell script
-$ curl localhost:8000/some-key
-```
+- Check if proposal and commit are from the same peer?
+- Resolve disagreements between peers
 
 # TODO
 
-- clustering with parameter, no autoclustering
-- replication within cluster, then check other cluster
-- no leader election, no RAFT, no pub/sub
+- instructions
+- string to []byte
 - replicate state and metadata when node joins cluster
-- set up kdht bootstrapping node
+- clean up proposals and commits when a failure happens when storing

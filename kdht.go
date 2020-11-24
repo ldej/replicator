@@ -27,7 +27,6 @@ func NewKDHT(ctx context.Context, host host.Host, config Config) (*disc.RoutingD
 		return nil, err
 	}
 
-	log.Println("Bootstrapping the DHT")
 	if err = kdht.Bootstrap(ctx); err != nil {
 		return nil, err
 	}

@@ -47,7 +47,7 @@ func main() {
 	flag.StringVar(&config.ClusterID, "cid", "", "ID of the cluster to join")
 	flag.Var(&config.ListenAddresses, "listen", "Adds a multiaddress to the listen list")
 	flag.StringVar(&config.ProtocolID, "protocolid", "/p2p/rpc/replicator", "")
-	flag.IntVar(&config.HttpPort, "http", 8000, "")
+	flag.IntVar(&config.HttpPort, "http", 0, "")
 	flag.Parse()
 
 	ctx := context.Background()
@@ -62,6 +62,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	log.Println("Replicator ready")
 
 	StartWebServer(config.HttpPort, cluster)
 }

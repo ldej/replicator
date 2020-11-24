@@ -3,13 +3,16 @@ package main
 import (
 	"context"
 	"log"
+	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 type PeerManager struct {
 	config Config
-	peers  map[peer.ID]ID // TODO locking
+
+	peersLock sync.Mutex
+	peers     map[peer.ID]ID
 }
 
 func NewPeerManager(ctx context.Context, config Config) *PeerManager {
@@ -20,11 +23,17 @@ func NewPeerManager(ctx context.Context, config Config) *PeerManager {
 }
 
 func (m *PeerManager) IsKnownPeer(peerID peer.ID) bool {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	_, found := m.peers[peerID]
 	return found
 }
 
 func (m *PeerManager) AddPeer(p ID) {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	if _, found := m.peers[p.ID]; !found {
 		m.peers[p.ID] = p
 		log.Printf("Added peer %s from cluster %s", p.ID, p.ClusterID)
@@ -32,6 +41,9 @@ func (m *PeerManager) AddPeer(p ID) {
 }
 
 func (m *PeerManager) ClusterPeers() IDs {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	var peers IDs
 	for _, p := range m.peers {
 		if p.ClusterID == m.config.ClusterID {
@@ -42,6 +54,9 @@ func (m *PeerManager) ClusterPeers() IDs {
 }
 
 func (m *PeerManager) AllIDs() IDs {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	var peers IDs
 	for _, p := range m.peers {
 		peers = append(peers, p)
@@ -50,6 +65,9 @@ func (m *PeerManager) AllIDs() IDs {
 }
 
 func (m *PeerManager) PeersPerCluster() map[string]IDs {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
 	var peers = map[string]IDs{}
 
 	for _, p := range m.peers {
