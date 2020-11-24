@@ -54,9 +54,11 @@ func main() {
 
 	host := NewHost(ctx, config)
 
-	replicationService := NewReplicationService()
+	peerManager := NewPeerManager(ctx, config)
 
-	cluster, err := NewCluster(ctx, host, config, replicationService)
+	replicationService := NewReplicationService(ctx, config, peerManager)
+
+	cluster, err := NewCluster(ctx, host, config, replicationService, peerManager)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -10,3 +10,13 @@ type ID struct {
 	Addresses []string  `json:"addresses"`
 	Peers     []peer.ID `json:"peers"`
 }
+
+type IDs []ID
+
+func (ids IDs) PeerIDs() peer.IDSlice {
+	var peerIDs peer.IDSlice
+	for _, id := range ids {
+		peerIDs = append(peerIDs, id.ID)
+	}
+	return peerIDs
+}

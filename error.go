@@ -2,8 +2,6 @@ package main
 
 import (
 	"errors"
-
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 var (
@@ -11,18 +9,20 @@ var (
 )
 
 type PeerError struct {
-	PeerID string `json:"peerId"`
+	PeerID       string `json:"peerId"`
+	ClusterID    string `json:"clusterID"`
 	ErrorMessage string `json:"error"`
 }
 
 type PeerErrors []PeerError
 
-func MapPeerErrors(peers peer.IDSlice, errors []error) PeerErrors {
+func MapPeerErrors(peers IDs, errors []error) PeerErrors {
 	var peerErrors PeerErrors
 	for i, err := range errors {
 		if err != nil {
 			peerErrors = append(peerErrors, PeerError{
-				PeerID:       peers[i].String(),
+				PeerID:       peers[i].ID.String(),
+				ClusterID:    peers[i].ClusterID,
 				ErrorMessage: err.Error(),
 			})
 		}

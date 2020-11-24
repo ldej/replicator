@@ -24,8 +24,7 @@ type Cluster struct {
 	rpcClient        *rpc.Client
 	routingDiscovery *discovery.RoutingDiscovery
 
-	allPeers     peer.IDSlice
-	clusterPeers peer.IDSlice
+	peerManager *PeerManager
 
 	replicationService *ReplicationService
 }
@@ -35,6 +34,7 @@ func NewCluster(
 	host host.Host,
 	config Config,
 	replicationService *ReplicationService,
+	peerManager *PeerManager,
 ) (*Cluster, error) {
 
 	kdht, err := NewKDHT(ctx, host, config)
@@ -51,15 +51,15 @@ func NewCluster(
 		rpcClient:          nil,
 		routingDiscovery:   kdht,
 		replicationService: replicationService,
+		peerManager:        peerManager,
 	}
+
+	// Add ourselves
+	id := c.ID(ctx)
+	c.peerManager.AddPeer(*id)
 
 	// Start discovering peers
 	go c.discover()
-
-	// // Wait until we actually join a cluster before we enable the rpc calls
-	// if len(c.config.BootstrapPeers) > 0 {
-	// 	c.bootstrap(ctx)
-	// }
 
 	err = c.setupRpc()
 	if err != nil {
@@ -70,18 +70,6 @@ func NewCluster(
 
 	return c, nil
 }
-
-// func (c *Cluster) bootstrap(ctx context.Context) {
-// 	for _, p := range c.config.BootstrapPeers {
-// 		pinfo, err := peer.AddrInfoFromP2pAddr(p)
-// 		if err != nil {
-// 			log.Printf("Err: %v", err)
-// 			continue
-// 		}
-// 		// TODO find a peer in our cluster to get state from
-// 	}
-//
-// }
 
 func (c *Cluster) setupRpc() error {
 	rpcServer := rpc.NewServer(c.host, protocol.ID(c.config.ProtocolID))
@@ -124,22 +112,31 @@ func (c *Cluster) discover() {
 				continue
 			}
 
-			if c.knownPeer(p.ID) {
-				continue
-			}
-
 			if c.host.Network().Connectedness(p.ID) != network.Connected {
-				if _, err := c.host.Network().DialPeer(c.ctx, p.ID); err != nil {
-					//log.Printf("Failed to connect to %s: %-v", p.ID, err)
+				_, err := c.host.Network().DialPeer(c.ctx, p.ID)
+				if err != nil {
+					// log.Printf("Failed to connect to %s: %-v", p.ID, err)
 					continue
 				}
 			}
 
-			log.Printf(" -> Connected to %s", p.ID)
-
-
+			if !c.peerManager.IsKnownPeer(p.ID) {
+				var id ID
+				err = c.rpcClient.Call(
+					p.ID,
+					ClusterServiceName,
+					ClusterIDFuncName,
+					struct{}{},
+					&id,
+				)
+				if err != nil {
+					log.Printf("Failed to get peer ID: %-v", err)
+					continue
+				}
+				c.peerManager.AddPeer(id)
+			}
 		}
-		time.Sleep(time.Second * 15)
+		time.Sleep(time.Second * 1)
 	}
 }
 
@@ -185,10 +182,10 @@ func (c *Cluster) ID(ctx context.Context) *ID {
 	}
 
 	return &ID{
-		ID: c.id,
+		ID:        c.id,
 		ClusterID: c.config.ClusterID,
 		Addresses: addrs,
-		Peers: c.host.Peerstore().Peers(),
+		Peers:     c.host.Peerstore().Peers(),
 	}
 }
 
@@ -199,14 +196,6 @@ func Ctxts(n int) []context.Context {
 	}
 	return ctxs
 }
-
-// func CopyEmptyStructToIfaces(in []struct{}) []interface{} {
-// 	ifaces := make([]interface{}, len(in))
-// 	for i := range in {
-// 		ifaces[i] = &in[i]
-// 	}
-// 	return ifaces
-// }
 
 func CopyIDsToIfaces(in []*ID) []interface{} {
 	ifaces := make([]interface{}, len(in))

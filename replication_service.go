@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 
@@ -11,35 +12,94 @@ import (
 )
 
 var (
-	ErrDuplicateKey            = errors.New("duplicate key")
-	ErrKeyAlreadyProposed      = errors.New("key already proposed")
-	ErrProposalNotFound        = errors.New("proposal not found")
-	ErrNotFound                = errors.New("not found")
+	ErrDuplicateKey       = errors.New("duplicate key")
+	ErrKeyAlreadyProposed = errors.New("key already proposed")
+	ErrProposalNotFound   = errors.New("proposal not found")
+	ErrNotFound           = errors.New("not found")
 )
 
 type ReplicationService struct {
-	host      host.Host
-	rpcClient *rpc.Client
+	host        host.Host
+	rpcClient   *rpc.Client
+	config      Config
+	peerManager *PeerManager
 
-	store    sync.Map
-	proposed sync.Map
+	storeLock sync.Mutex
+
+	stored   map[string]string
+	proposed map[string]string
 }
 
-func NewReplicationService() *ReplicationService {
+func NewReplicationService(ctx context.Context, config Config, peerManager *PeerManager) *ReplicationService {
 	return &ReplicationService{
-		store:    sync.Map{},
-		proposed: sync.Map{},
+		config:      config,
+		peerManager: peerManager,
+		stored:      map[string]string{},
+		proposed:    map[string]string{},
 	}
 }
 
-func (r *ReplicationService) Propose(key string, value []byte) error {
-	_, foundStored := r.store.Load(key)
+func (r *ReplicationService) Store(key string, value string) (PeerErrors, error) {
 
-	_, foundProposed := r.proposed.Load(key)
+	// 1. Propose to our cluster
+	log.Printf("Proposing key %q to local cluster", key)
+	err := r.ProposeCluster(key, value)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("Successfully proposed key %q to local cluster", key)
+
+	// 2. Propose to all other clusters
+	peersPerCluster := r.peerManager.PeersPerCluster()
+	for clusterID, peers := range peersPerCluster {
+		log.Printf("Proposing to cluster %q", clusterID)
+		errs := r.ProposeOtherCluster(peers, key, value)
+		for _, err := range errs {
+			if err != nil {
+				// TODO clean up proposed key
+				log.Printf("Proposal failed: %v", err)
+				return MapPeerErrors(peers, errs), nil
+			}
+		}
+	}
+	log.Printf("All clusters accepted proposal for key %q", key)
+
+	// 3. Commit the key to our cluster
+	log.Printf("Committing %q to local cluster", key)
+	err = r.CommitCluster(key)
+	if err != nil {
+		// TODO clean up proposed key
+		return nil, err
+	}
+	log.Printf("Successfully committed key %q at local cluster", key)
+
+	// 4. Commit the key at every other cluster
+	for clusterID, peers := range peersPerCluster {
+		log.Printf("Committing key %q at cluster %q", key, clusterID)
+		errs := r.CommitOtherCluster(peers, key)
+		for _, err := range errs {
+			if err != nil {
+				// TODO clean up proposed key and partially committed key
+				log.Printf("Failed to commit: %-v", err)
+				return MapPeerErrors(peers, errs), nil
+			}
+		}
+	}
+	log.Printf("Successfully committed key %q at all clusters", key)
+	return nil, nil
+}
+
+func (r *ReplicationService) Propose(key string, value string) error {
+	r.storeLock.Lock()
+	defer r.storeLock.Unlock()
+
+	_, foundStored := r.stored[key]
+
+	_, foundProposed := r.proposed[key]
 
 	if !foundStored && !foundProposed {
 		// key does not exist yet
-		r.proposed.Store(key, value)
+		r.proposed[key] = value
 		return nil
 	}
 
@@ -54,95 +114,141 @@ func (r *ReplicationService) Propose(key string, value []byte) error {
 	return nil
 }
 
-func (r *ReplicationService) Store(key string, value []byte) PeerErrors {
-	peers := r.host.Peerstore().Peers() // TODO, only connect with our peers, and do clustering
+func (r *ReplicationService) ProposeCluster(key string, value string) error {
+	peers := r.peerManager.ClusterPeers().PeerIDs()
 	lenPeers := len(peers)
 
-	proposeReplies := make([]ProposeReply, lenPeers, lenPeers)
-	ctxs := make([]context.Context, lenPeers, lenPeers)
-	proposeReplyPointers := make([]interface{}, lenPeers, lenPeers)
+	proposeReplies := make([]*ProposeReply, lenPeers)
 
-	for i := range proposeReplyPointers {
-		proposeReplyPointers[i] = &proposeReplies[i]
-		ctxs[i] = context.Background()
-	}
-
-	log.Printf("Propose to store key %q at %v", key, peers)
 	errs := r.rpcClient.MultiCall(
-		ctxs,
+		Ctxts(lenPeers),
 		peers,
 		ReplicationServiceName,
 		ReplicationProposeFuncName,
-		ProposeArgs{Key: key, Value: value},
-		proposeReplyPointers,
+		ProposeArgs{
+			Key:   key,
+			Value: value,
+		},
+		CopyProposeRepliesToIfaces(proposeReplies),
 	)
-	for _, err := range errs {
+	for i, err := range errs {
 		if err != nil {
-			return MapPeerErrors(peers, errs)
+			return fmt.Errorf("key %q rejected by %q: %w", key, peers[i], err)
 		}
 	}
-	log.Printf("All peers accept proposal to store %q", key)
-
-	commitReplies := make([]CommitReply, lenPeers, lenPeers)
-	ctxs = make([]context.Context, lenPeers, lenPeers)
-	commitReplyPointers := make([]interface{}, lenPeers, lenPeers)
-
-	for i := range commitReplies {
-		commitReplyPointers[i] = &commitReplies[i]
-		ctxs[i] = context.Background()
-	}
-
-	log.Printf("Comitting key %q at %v", key, peers)
-	errs = r.rpcClient.MultiCall(
-		ctxs,
-		peers,
-		ReplicationServiceName,
-		ReplicationCommitFuncName,
-		CommitArgs{Key: key},
-		commitReplyPointers,
-	)
-	for _, err := range errs {
-		if err != nil {
-			return MapPeerErrors(peers, errs)
-		}
-	}
-	log.Printf("Comitted key %q at %v", key, peers)
 	return nil
 }
 
-func (r *ReplicationService) StoreLocal(key string, value []byte) {
-	r.store.Store(key, value)
+func (r *ReplicationService) ProposeOtherCluster(peers IDs, key string, value string) []error {
+	var errs []error
+	for _, peer := range peers {
+		var reply ProposeReply
+		err := r.rpcClient.Call(
+			peer.ID,
+			ReplicationServiceName,
+			ReplicationProposeClusterFuncName,
+			ProposeArgs{
+				Key:   key,
+				Value: value,
+			},
+			&reply,
+		)
+		if err == nil {
+			// Success
+			return nil
+		}
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func (r *ReplicationService) StoreLocal(key string, value string) {
+	r.storeLock.Lock()
+	defer r.storeLock.Unlock()
+
+	r.stored[key] = value
 }
 
 func (r *ReplicationService) Commit(key string) error {
-	value, found := r.proposed.LoadAndDelete(key)
+	r.storeLock.Lock()
+	defer r.storeLock.Unlock()
+
+	value, found := r.proposed[key]
 	if !found {
 		log.Printf("Proposal not found: %q", key)
 		return ErrProposalNotFound
 	}
+	delete(r.proposed, key)
 
-	r.store.Store(key, value)
+	r.stored[key] = value
 	return nil
 }
 
-func (r *ReplicationService) GetFromLocal(key string) ([]byte, error) {
-	value, found := r.store.Load(key)
-	if !found {
-		return nil, ErrNotFound
-	}
-	return value.([]byte), nil
-}
+func (r *ReplicationService) CommitCluster(key string) error {
+	peers := r.peerManager.ClusterPeers().PeerIDs()
+	lenPeers := len(peers)
 
-func (r *ReplicationService) GetFromPeers(key string) (map[string][]byte, PeerErrors) {
-	peers := r.host.Peerstore().Peers()
-	numberOfPeers := len(peers)
-
-	replies := make([]*GetReply, numberOfPeers, numberOfPeers)
-	ctxs := make([]context.Context, numberOfPeers, numberOfPeers)
+	replies := make([]*CommitReply, lenPeers)
 
 	errs := r.rpcClient.MultiCall(
-		ctxs,
+		Ctxts(lenPeers),
 		peers,
+		ReplicationServiceName,
+		ReplicationCommitFuncName,
+		CommitArgs{
+			Key: key,
+		},
+		CopyCommitRepliesToIfaces(replies),
+	)
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ReplicationService) CommitOtherCluster(peers IDs, key string) []error {
+	var errs []error
+	for _, peer := range peers {
+		var reply CommitReply
+		err := r.rpcClient.Call(
+			peer.ID,
+			ReplicationServiceName,
+			ReplicationCommitClusterFuncName,
+			CommitArgs{
+				Key: key,
+			},
+			&reply,
+		)
+		if err == nil {
+			return nil
+		}
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func (r *ReplicationService) GetLocal(key string) (string, error) {
+	r.storeLock.Lock()
+	defer r.storeLock.Unlock()
+
+	value, found := r.stored[key]
+	if !found {
+		return "", ErrNotFound
+	}
+	return value, nil
+}
+
+func (r *ReplicationService) GetGlobal(key string) (map[string]string, PeerErrors) {
+	peers := r.peerManager.AllIDs()
+	lenPeers := len(peers)
+
+	replies := make([]*GetReply, lenPeers, lenPeers)
+
+	errs := r.rpcClient.MultiCall(
+		Ctxts(lenPeers),
+		peers.PeerIDs(),
 		ReplicationServiceName,
 		ReplicationGetFuncName,
 		GetArgs{Key: key},
@@ -154,18 +260,36 @@ func (r *ReplicationService) GetFromPeers(key string) (map[string][]byte, PeerEr
 		}
 	}
 
-	var results = map[string][]byte{}
+	var results = map[string]string{}
 	for i, p := range peers {
-		results[p.String()] = replies[i].Value
+		results[p.ID.String()] = replies[i].Value
 	}
 	return results, nil
 }
 
-func CopyGetRepliesToIfaces(in []*GetReply) []interface{} {
-	ifaces := make([]interface{}, len(in))
-	for i := range in {
-		in[i] = &GetReply{}
-		ifaces[i] = in[i]
+func CopyGetRepliesToIfaces(out []*GetReply) []interface{} {
+	ifaces := make([]interface{}, len(out))
+	for i := range out {
+		out[i] = &GetReply{}
+		ifaces[i] = out[i]
+	}
+	return ifaces
+}
+
+func CopyProposeRepliesToIfaces(out []*ProposeReply) []interface{} {
+	ifaces := make([]interface{}, len(out))
+	for i := range out {
+		out[i] = &ProposeReply{}
+		ifaces[i] = out[i]
+	}
+	return ifaces
+}
+
+func CopyCommitRepliesToIfaces(out []*CommitReply) []interface{} {
+	ifaces := make([]interface{}, len(out))
+	for i := range out {
+		out[i] = &CommitReply{}
+		ifaces[i] = out[i]
 	}
 	return ifaces
 }
