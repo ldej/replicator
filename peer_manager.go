@@ -22,6 +22,17 @@ func NewPeerManager(ctx context.Context, config Config) *PeerManager {
 	}
 }
 
+func (m *PeerManager) AllIDs() IDs {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
+	var peers IDs
+	for _, p := range m.peers {
+		peers = append(peers, p)
+	}
+	return peers
+}
+
 func (m *PeerManager) IsKnownPeer(peerID peer.ID) bool {
 	m.peersLock.Lock()
 	defer m.peersLock.Unlock()
@@ -49,17 +60,6 @@ func (m *PeerManager) ClusterPeers() IDs {
 		if p.ClusterID == m.config.ClusterID {
 			peers = append(peers, p)
 		}
-	}
-	return peers
-}
-
-func (m *PeerManager) AllIDs() IDs {
-	m.peersLock.Lock()
-	defer m.peersLock.Unlock()
-
-	var peers IDs
-	for _, p := range m.peers {
-		peers = append(peers, p)
 	}
 	return peers
 }

@@ -19,7 +19,6 @@ func NewHost(ctx context.Context, config Config) host.Host {
 
 	h, err := libp2p.New(ctx,
 		libp2p.ListenAddrs([]multiaddr.Multiaddr(config.ListenAddresses)...),
-		libp2p.NATPortMap(),
 		libp2p.Identity(priv),
 	)
 	if err != nil {

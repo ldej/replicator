@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"reflect"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -11,6 +13,11 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	"github.com/libp2p/go-libp2p-discovery"
 	"github.com/libp2p/go-libp2p-gorpc"
+)
+
+const (
+	bootstrapCount   = 3
+	bootstrapTimeout = 2 * time.Second
 )
 
 type Cluster struct {
@@ -65,8 +72,14 @@ func NewCluster(
 	if err != nil {
 		return nil, err
 	}
-
 	c.setupRPCClients()
+
+	c.bootstrap()
+	err = c.initializeState()
+	if err != nil {
+		log.Printf("Failed to initialize state: %v", err)
+		return nil, err
+	}
 
 	return c, nil
 }
@@ -140,19 +153,76 @@ func (c *Cluster) discover() {
 	}
 }
 
-func (c *Cluster) knownPeer(peer peer.ID) bool {
-	for _, p := range c.host.Peerstore().Peers() {
-		if peer == p {
-			return true
+func (c *Cluster) bootstrap() bool {
+	log.Printf("Waiting until %d peers are discovered", bootstrapCount)
+
+	ticker := time.NewTicker(bootstrapTimeout)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			peers := c.peerManager.AllIDs()
+			if len(peers) >= bootstrapCount {
+				log.Printf("Discovered %d peers", bootstrapCount)
+				return true
+			}
 		}
 	}
-	return false
+}
+
+func (c *Cluster) initializeState() error {
+	log.Println("Getting state from other peers")
+
+	// Get state from other peers
+	peers := c.peerManager.AllIDs().Without(c.id).PeerIDs()
+	lenPeers := len(peers)
+	ctxts := Ctxts(lenPeers)
+
+	states := make([]*State, lenPeers)
+
+	errs := c.rpcClient.MultiCall(
+		ctxts,
+		peers,
+		ReplicationServiceName,
+		ReplicationStateFuncName,
+		struct{}{},
+		CopyStateToIfaces(states),
+	)
+	log.Printf("Received state from %d peers, comparing states", lenPeers)
+
+	var statesToCompare []State
+	for i, err := range errs {
+		if err != nil {
+			return err
+		}
+		statesToCompare = append(statesToCompare, *states[i])
+	}
+
+	if len(statesToCompare) > 0 {
+		for _, state1 := range states {
+			if len(state1.Proposed) == 0 && len(state1.Stored) == 0 {
+				continue
+			}
+			for _, state2 := range states {
+				if len(state2.Proposed) == 0 && len(state2.Stored) == 0 {
+					continue
+				}
+				if !Equal(state1.Stored, state2.Stored) || !Equal(state1.Proposed, state2.Proposed) {
+					return errors.New("peers disagree on state")
+				}
+			}
+		}
+
+		log.Printf("All states are equal, adopted state")
+		c.replicationService.SetState(&statesToCompare[0])
+	}
+	return nil
 }
 
 func (c *Cluster) Peers(ctx context.Context) ([]*ID, error) {
-	peers := c.host.Peerstore().Peers()
+	peers := c.peerManager.AllIDs().PeerIDs()
 	lenPeers := len(peers)
-
 	ctxts := Ctxts(lenPeers)
 
 	ids := make([]*ID, lenPeers)
@@ -189,6 +259,10 @@ func (c *Cluster) ID(ctx context.Context) *ID {
 	}
 }
 
+func Equal(first map[string][]byte, second map[string][]byte) bool {
+	return reflect.DeepEqual(first, second)
+}
+
 func Ctxts(n int) []context.Context {
 	ctxs := make([]context.Context, n)
 	for i := 0; i < n; i++ {
@@ -201,6 +275,15 @@ func CopyIDsToIfaces(in []*ID) []interface{} {
 	ifaces := make([]interface{}, len(in))
 	for i := range in {
 		in[i] = &ID{}
+		ifaces[i] = in[i]
+	}
+	return ifaces
+}
+
+func CopyStateToIfaces(in []*State) []interface{} {
+	ifaces := make([]interface{}, len(in))
+	for i := range in {
+		in[i] = &State{}
 		ifaces[i] = in[i]
 	}
 	return ifaces

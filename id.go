@@ -20,3 +20,13 @@ func (ids IDs) PeerIDs() peer.IDSlice {
 	}
 	return peerIDs
 }
+
+func (ids IDs) Without(r peer.ID) IDs {
+	var newIDs IDs
+	for _, id := range ids {
+		if id.ID != r {
+			newIDs = append(newIDs, id)
+		}
+	}
+	return newIDs
+}

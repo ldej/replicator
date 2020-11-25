@@ -1,13 +1,5 @@
 package main
 
-import (
-	"errors"
-)
-
-var (
-	ErrNotInCluster = errors.New("not in cluster")
-)
-
 type PeerError struct {
 	PeerID       string `json:"peerId"`
 	ClusterID    string `json:"clusterID"`
