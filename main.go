@@ -64,5 +64,11 @@ func main() {
 	}
 	log.Println("Replicator ready")
 
-	StartWebServer(config.HttpPort, cluster)
+	go StartWebServer(config.HttpPort, cluster)
+
+	err = cluster.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+	select {}
 }

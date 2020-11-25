@@ -1,0 +1,166 @@
+definitions:
+  main.PeerError:
+    properties:
+      clusterID:
+        type: string
+      error:
+        type: string
+      peerId:
+        type: string
+    type: object
+  main.Response:
+    properties:
+      error:
+        type: string
+      errors:
+        items:
+          $ref: '#/definitions/main.PeerError'
+        type: array
+    type: object
+info:
+  contact: {}
+paths:
+  /local/proposed/{key}:
+    get:
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Bytes
+          schema:
+            type: string
+        "500":
+          description: Something went wrong
+          schema:
+            type: string
+      summary: Get the value for a key from the local peer's "proposed" map
+    put:
+      consumes:
+      - text/plain
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Value
+        in: body
+        name: value
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Empty
+          schema:
+            type: string
+      summary: Add a key and value to the local peer's proposed map
+  /local/stored/{key}:
+    get:
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Bytes
+          schema:
+            type: string
+        "500":
+          description: Something went wrong
+          schema:
+            type: string
+      summary: Get the value for a key from the local peer's "stored" map
+    put:
+      consumes:
+      - text/plain
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Value
+        in: body
+        name: value
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Empty
+          schema:
+            type: string
+      summary: Add a key and value to the local peer's "stored" map
+  /peers:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Peers
+          schema:
+            type: string
+      summary: Get the peer information from all peers
+  /store/{key}:
+    get:
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Bytes
+          schema:
+            type: string
+        "500":
+          description: Something went wrong
+          schema:
+            type: string
+      summary: Get the value for a key
+    put:
+      consumes:
+      - text/plain
+      parameters:
+      - description: Key
+        in: path
+        name: key
+        required: true
+        type: string
+      - description: Value
+        in: body
+        name: value
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Empty
+          schema:
+            type: string
+        "500":
+          description: Something went wrong
+          schema:
+            $ref: '#/definitions/main.Response'
+      summary: Add a key and value
+swagger: "2.0"

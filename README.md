@@ -129,8 +129,5 @@ GOPRIVATE='github.com/libp2p/*' go get ./...
 
 # TODO
 
-- instructions
-- string to []byte?
-- detect disconnected peers?
+- detect disconnected peers
 - clean up proposals and commits when a failure happens when storing
-- test failure scenarios

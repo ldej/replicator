@@ -73,15 +73,17 @@ func NewCluster(
 		return nil, err
 	}
 	c.setupRPCClients()
+	return c, nil
+}
 
+func (c *Cluster) Start() error {
 	c.bootstrap()
-	err = c.initializeState()
+	err := c.initializeState()
 	if err != nil {
 		log.Printf("Failed to initialize state: %v", err)
-		return nil, err
+		return err
 	}
-
-	return c, nil
+	return nil
 }
 
 func (c *Cluster) setupRpc() error {
