@@ -17,7 +17,7 @@ import (
 
 const (
 	bootstrapCount   = 3
-	bootstrapTimeout = 2 * time.Second
+	bootstrapTimeout = 5 * time.Second
 )
 
 type Cluster struct {
@@ -145,7 +145,7 @@ func (c *Cluster) discover() {
 					&id,
 				)
 				if err != nil {
-					log.Printf("Failed to get peer ID: %-v", err)
+					log.Printf("Failed to get peer ID for %q: %-v", p.ID, err)
 					continue
 				}
 				c.peerManager.AddPeer(id)
@@ -259,6 +259,27 @@ func (c *Cluster) ID(ctx context.Context) *ID {
 		Addresses: addrs,
 		Peers:     c.host.Peerstore().Peers(),
 	}
+}
+
+func (c *Cluster) RemovePeer(p peer.ID) error {
+	log.Printf("Peer %q left", p.Pretty())
+	return c.peerManager.RemovePeer(p)
+}
+
+func (c *Cluster) Exit() {
+	peers := c.peerManager.AllIDs().Without(c.id)
+	lenPeers := len(peers)
+
+	replies := make([]struct{}, lenPeers)
+
+	c.rpcClient.MultiCall(
+		Ctxts(lenPeers),
+		peers.PeerIDs(),
+		ClusterServiceName,
+		ClusterRemovePeerFuncName,
+		c.id,
+		CopyEmptyStructToIfaces(replies),
+	)
 }
 
 func Equal(first map[string][]byte, second map[string][]byte) bool {

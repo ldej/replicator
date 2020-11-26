@@ -3,8 +3,12 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/multiformats/go-multiaddr"
 )
@@ -66,9 +70,28 @@ func main() {
 
 	go StartWebServer(config.HttpPort, cluster)
 
+	setupExitHandler(cluster)
+
 	err = cluster.Start()
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	select {}
+}
+
+func setupExitHandler(cluster *Cluster) {
+	c := make(chan os.Signal, 20)
+
+	signal.Notify(c, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		for {
+			select {
+			case <-c:
+				fmt.Printf("\rExiting...\n")
+				cluster.Exit()
+				os.Exit(0)
+			}
+		}
+	}()
 }

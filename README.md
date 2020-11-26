@@ -129,5 +129,4 @@ GOPRIVATE='github.com/libp2p/*' go get ./...
 
 # TODO
 
-- detect disconnected peers
 - clean up proposals and commits when a failure happens when storing

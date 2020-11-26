@@ -51,6 +51,14 @@ func (m *PeerManager) AddPeer(p ID) {
 	}
 }
 
+func (m *PeerManager) RemovePeer(p peer.ID) error {
+	m.peersLock.Lock()
+	defer m.peersLock.Unlock()
+
+	delete(m.peers, p)
+	return nil
+}
+
 func (m *PeerManager) ClusterPeers() IDs {
 	m.peersLock.Lock()
 	defer m.peersLock.Unlock()
