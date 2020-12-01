@@ -40,6 +40,7 @@ func StartWebServer(port int, cluster *Cluster) {
 	r.HandleFunc("/local/proposed/{key}", app.PutProposed).Methods(http.MethodPut)
 	r.HandleFunc("/local/proposed/{key}", app.GetProposed).Methods(http.MethodGet)
 	r.HandleFunc("/peers", app.Peers).Methods(http.MethodGet)
+	r.HandleFunc("/clusters", app.Clusters).Methods(http.MethodGet)
 	r.PathPrefix("/swagger").Handler(httpSwagger.WrapHandler)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -214,4 +215,17 @@ func (a *App) Peers(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	_ = json.NewEncoder(w).Encode(peers)
+}
+
+// Clusters example
+// @Summary Get the peer information from all clusters
+// @Produce json
+// @Success 200 {object} string	"Clusters"
+// @Router /clusters [get]
+func (a *App) Clusters(w http.ResponseWriter, r *http.Request) {
+	clusters := a.cluster.Clusters()
+
+	w.Header().Set("Content-Type", "application/json")
+
+	_ = json.NewEncoder(w).Encode(clusters)
 }

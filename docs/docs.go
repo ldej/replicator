@@ -24,6 +24,22 @@ var doc = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/clusters": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "summary": "Get the peer information from all clusters",
+                "responses": {
+                    "200": {
+                        "description": "Clusters",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/local/proposed/{key}": {
             "get": {
                 "produces": [

@@ -20,6 +20,16 @@ definitions:
 info:
   contact: {}
 paths:
+  /clusters:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Clusters
+          schema:
+            type: string
+      summary: Get the peer information from all clusters
   /local/proposed/{key}:
     get:
       parameters:

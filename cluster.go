@@ -245,6 +245,15 @@ func (c *Cluster) Peers(ctx context.Context) ([]*ID, error) {
 	return ids, nil
 }
 
+func (c *Cluster) Clusters() map[string][]string {
+	clusters := map[string][]string{}
+
+	for _, p := range c.peerManager.peers {
+		clusters[p.ClusterID] = append(clusters[p.ClusterID], p.ID.Pretty())
+	}
+	return clusters
+}
+
 func (c *Cluster) ID(ctx context.Context) *ID {
 	// msgpack decode error [pos 108]: interface conversion: *multiaddr.Multiaddr is not
 	// encoding.BinaryUnmarshaler: missing method UnmarshalBinary
